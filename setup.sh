@@ -29,6 +29,11 @@ echo "[$(date -Is)] $(geni-get client_id) role=$ROLE ref=$BALLISTA_REF tasks=$CO
 
 # 1) Build deps
 export DEBIAN_FRONTEND=noninteractive
+# man-db rebuilds its index after every package install and is notoriously
+# slow on fresh Blockstores. We don't need man pages, so disable it.
+echo 'set man-db/auto-update false' | debconf-communicate >/dev/null || true
+dpkg-divert --local --rename --add /usr/bin/mandb >/dev/null || true
+ln -sf /bin/true /usr/bin/mandb
 apt-get update
 apt-get install -y --no-install-recommends \
     build-essential pkg-config libssl-dev cmake unzip \
