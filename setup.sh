@@ -127,6 +127,9 @@ if [[ "$ROLE" == "scheduler" ]]; then
     CMD=(
         "$BALLISTA_DIR/target/release/ballista-scheduler"
         --bind-host 0.0.0.0 --bind-port 50050
+        # Advertise to executors via the LAN hostname so their status
+        # reports/heartbeats don't try to reach localhost.
+        --external-host "$SCHEDULER_HOST"
     )
 elif [[ "$ROLE" == "executor" ]]; then
     until nc -z "$SCHEDULER_HOST" 50050; do sleep 5; done
