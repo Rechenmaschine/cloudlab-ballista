@@ -57,12 +57,24 @@ if ! protoc --version 2>/dev/null | grep -qE "libprotoc (2[7-9]|[3-9][0-9])"; th
     rm "/tmp/${PROTOC_ZIP}"
 fi
 
-# 2) Rust (default install path: $HOME/.cargo, which is /root/.cargo here).
-if ! command -v cargo >/dev/null; then
+# 2) Rust — install system-wide under /usr/local so every user gets cargo
+# on login (via /etc/profile.d). The default rustup location depends on
+# $HOME, which varies based on how setup.sh is invoked (sudo, geniuser,
+# etc.), so we pin it explicitly.
+export CARGO_HOME=/usr/local/cargo
+export RUSTUP_HOME=/usr/local/rustup
+if [[ ! -x "$CARGO_HOME/bin/cargo" ]]; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --default-toolchain stable --profile minimal
+        | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
 fi
-source "$HOME/.cargo/env"
+chmod -R a+rX "$CARGO_HOME" "$RUSTUP_HOME"
+cat >/etc/profile.d/cargo.sh <<'EOF'
+export CARGO_HOME=/usr/local/cargo
+export RUSTUP_HOME=/usr/local/rustup
+export PATH="$CARGO_HOME/bin:$PATH"
+EOF
+chmod 0644 /etc/profile.d/cargo.sh
+export PATH="$CARGO_HOME/bin:$PATH"
 
 # 3) Fetch + build Ballista on /mnt/work (ephemeral, not snapshotted).
 chmod 1777 /mnt/work || true
