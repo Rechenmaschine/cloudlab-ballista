@@ -29,11 +29,15 @@ pc = portal.Context()
 request = pc.makeRequestRSpec()
 
 # ---------------------------------------------------------------------------
-# Core
+# Cluster
 # ---------------------------------------------------------------------------
 pc.defineParameter(
     "nExecutors", "Number of Ballista executors",
     portal.ParameterType.INTEGER, 4)
+
+pc.defineParameter("phystype", "Physical node type (blank=any)",
+                   portal.ParameterType.NODETYPE, "",
+                   longDescription="e.g. c220g2, c6420, xl170")
 
 imageList = [
     ('default', 'Default Image (cluster picks)'),
@@ -44,32 +48,30 @@ imageList = [
 pc.defineParameter("osImage", "OS image",
                    portal.ParameterType.IMAGE, imageList[1], imageList)
 
-pc.defineParameter("phystype", "Physical node type (blank=any)",
-                   portal.ParameterType.NODETYPE, "",
-                   longDescription="e.g. c220g2, c6420, xl170")
-
-pc.defineParameter(
-    "workDiskSize", "Ephemeral /mnt/work Blockstore size per node (GB)",
-    portal.ParameterType.INTEGER, 30,
-    longDescription="Holds Ballista source + cargo build target/ AND "
-                    "(on executors) the --work-dir for shuffle/spill. "
-                    "Blockstores are NOT captured in disk-image snapshots "
-                    "and are recreated empty for every new experiment, so "
-                    "switching ballistaRef always triggers a clean build.")
-
 # ---------------------------------------------------------------------------
-# Ballista / experiment
+# Ballista
 # ---------------------------------------------------------------------------
 pc.defineParameter(
     "ballistaRepo", "Ballista repo URL (default: upstream Apache Ballista)",
     portal.ParameterType.STRING,
     "https://github.com/apache/datafusion-ballista.git",
     longDescription="Leave default for upstream, or point at your fork.")
+
 pc.defineParameter(
     "ballistaRef", "Branch, tag, or commit SHA to check out",
     portal.ParameterType.STRING, "main",
     longDescription="A branch ('main') or tag ('v0.12.0') always fetches the "
                     "current tip; a full or short commit SHA pins it.")
+
+pc.defineParameter(
+    "concurrentTasks", "Concurrent tasks per executor (0 = all CPU cores)",
+    portal.ParameterType.INTEGER, 0,
+    longDescription="Passed to ballista-executor as --concurrent-tasks. "
+                    "Lower it to study scheduler queueing or simulate slow nodes.")
+
+# ---------------------------------------------------------------------------
+# Storage
+# ---------------------------------------------------------------------------
 pc.defineParameter(
     "datasetURN",
     "Image-Backed Dataset URN to pre-populate /mnt/data (blank = empty)",
@@ -86,10 +88,13 @@ pc.defineParameter(
                     "when no dataset is set.")
 
 pc.defineParameter(
-    "concurrentTasks", "Concurrent tasks per executor (0 = all CPU cores)",
-    portal.ParameterType.INTEGER, 0,
-    longDescription="Passed to ballista-executor as --concurrent-tasks. "
-                    "Lower it to study scheduler queueing or simulate slow nodes.")
+    "workDiskSize", "Ephemeral /mnt/work Blockstore size per node (GB)",
+    portal.ParameterType.INTEGER, 30,
+    longDescription="Holds Ballista source + cargo build target/ AND "
+                    "(on executors) the --work-dir for shuffle/spill. "
+                    "Blockstores are NOT captured in disk-image snapshots "
+                    "and are recreated empty for every new experiment, so "
+                    "switching ballistaRef always triggers a clean build.")
 
 # ---------------------------------------------------------------------------
 # Network shaping
