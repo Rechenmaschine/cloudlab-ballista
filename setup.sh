@@ -116,12 +116,17 @@ if [[ -n "$PROJECT_USER" ]]; then
     chown -h "$PROJECT_USER" "/users/$PROJECT_USER/ballista"
 fi
 
-# 4) Launch daemon inside a detached tmux session so it can be attached
-# later with: sudo tmux attach -t ballista
-# Output is tee'd to a log file too, so you can still grep/tail without
-# attaching to the tmux session.
+# 4) Launch daemon inside a detached tmux session, owned by the project
+# user (not root). That way `tmux attach`, `tail`, and `kill` all work
+# without sudo. Falls back to root if no project user was found.
 TMUX_SESSION=ballista
-LOG_FILE="/var/log/ballista-${ROLE}.log"
+RUN_AS="${PROJECT_USER:-root}"
+LOG_DIR="/var/log/ballista"
+LOG_FILE="${LOG_DIR}/${ROLE}.log"
+mkdir -p "$LOG_DIR"
+chown "$RUN_AS" "$LOG_DIR"
+mkdir -p /mnt/work/ballista-rundir
+chown "$RUN_AS" /mnt/work/ballista-rundir
 
 if [[ "$ROLE" == "scheduler" ]]; then
     CMD=(
@@ -138,7 +143,6 @@ elif [[ "$ROLE" == "executor" ]]; then
     # the scheduler — that's guaranteed to be on the experiment LAN.
     DATA_IP="$(ip -4 -o route get "$(getent hosts "$SCHEDULER_HOST" | awk '{print $1}')" \
                | sed -n 's/.*src \([0-9.]*\).*/\1/p')"
-    mkdir -p /mnt/work/ballista-rundir
     CMD=(
         ballista-executor
         --bind-host 0.0.0.0 --external-host "$DATA_IP"
@@ -153,18 +157,17 @@ else
 fi
 
 # Kill any pre-existing session of the same name (idempotent re-runs).
-tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+runuser -u "$RUN_AS" -- tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 
-# Start detached. The shell wrapper pipes stdout/stderr through tee so
-# both the tmux scrollback and the log file get the daemon's output.
-tmux new-session -d -s "$TMUX_SESSION" \
+# Start detached, owned by $RUN_AS. tee splits output to log file too.
+runuser -u "$RUN_AS" -- tmux new-session -d -s "$TMUX_SESSION" \
     "exec '${CMD[0]}' ${CMD[*]:1} 2>&1 | tee '$LOG_FILE'"
 
-echo "[$(date -Is)] $ROLE launched in tmux session '$TMUX_SESSION' (log: $LOG_FILE)"
+echo "[$(date -Is)] $ROLE launched as $RUN_AS in tmux session '$TMUX_SESSION' (log: $LOG_FILE)"
 
 # 5) Liveness check: tmux session should still exist 3s later.
 sleep 3
-if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+if ! runuser -u "$RUN_AS" -- tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
     echo "[FAILED $(date -Is)] $ROLE daemon died within 3s; tmux session gone" \
         | tee /var/log/ballista-setup.FAILED >&2
     echo "--- tail of daemon log ---" >&2
