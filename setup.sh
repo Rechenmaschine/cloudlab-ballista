@@ -92,12 +92,12 @@ cd "$BALLISTA_DIR"
 case "$ROLE" in
     scheduler)
         cargo build --release -p ballista-scheduler -p ballista-cli
-        # Expose only the user-facing CLI to everyone via /usr/local/bin
-        # (always on PATH, even in non-login shells like `ssh node cmd`).
-        ln -sf "$BALLISTA_DIR/target/release/ballista-cli" /usr/local/bin/ballista-cli
+        ln -sf "$BALLISTA_DIR/target/release/ballista-scheduler" /usr/local/bin/ballista-scheduler
+        ln -sf "$BALLISTA_DIR/target/release/ballista-cli"       /usr/local/bin/ballista-cli
         ;;
     executor)
         cargo build --release -p ballista-executor
+        ln -sf "$BALLISTA_DIR/target/release/ballista-executor"  /usr/local/bin/ballista-executor
         ;;
 esac
 
@@ -125,7 +125,7 @@ LOG_FILE="/var/log/ballista-${ROLE}.log"
 
 if [[ "$ROLE" == "scheduler" ]]; then
     CMD=(
-        "$BALLISTA_DIR/target/release/ballista-scheduler"
+        ballista-scheduler
         --bind-host 0.0.0.0 --bind-port 50050
         # Advertise to executors via the LAN hostname so their status
         # reports/heartbeats don't try to reach localhost.
@@ -140,7 +140,7 @@ elif [[ "$ROLE" == "executor" ]]; then
                | sed -n 's/.*src \([0-9.]*\).*/\1/p')"
     mkdir -p /mnt/work/ballista-rundir
     CMD=(
-        "$BALLISTA_DIR/target/release/ballista-executor"
+        ballista-executor
         --bind-host 0.0.0.0 --external-host "$DATA_IP"
         --bind-port 50051
         --scheduler-host "$SCHEDULER_HOST" --scheduler-port 50050
