@@ -70,6 +70,9 @@ if [[ ! -x "$CARGO_HOME/bin/cargo" ]]; then
         | HOME=/root sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
 fi
 chmod -R a+rX "$CARGO_HOME" "$RUSTUP_HOME"
+# Make the registry/cache dirs world-writable so non-root users can run
+# `cargo build` without sudo (cargo writes to registry/cache/, registry/src/).
+chmod -R a+rwX "$CARGO_HOME/registry" "$CARGO_HOME/git" 2>/dev/null || true
 cat >/etc/profile.d/cargo.sh <<'EOF'
 export CARGO_HOME=/usr/local/cargo
 export RUSTUP_HOME=/usr/local/rustup
@@ -90,7 +93,7 @@ git -C "$BALLISTA_DIR" fetch --depth 1 origin "$BALLISTA_REF"
 git -C "$BALLISTA_DIR" checkout FETCH_HEAD
 cd "$BALLISTA_DIR"
 case "$ROLE" in
-    scheduler) cargo build --release -p ballista-scheduler ;;
+    scheduler) cargo build --release -p ballista-scheduler -p ballista-cli ;;
     executor)  cargo build --release -p ballista-executor ;;
 esac
 
