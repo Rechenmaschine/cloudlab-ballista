@@ -1,4 +1,4 @@
-"""Ballista + Redbench experiment.
+"""Ballista distributed experiment.
 
 1 scheduler + N executors on a (shapeable) LAN.
 
@@ -6,9 +6,9 @@ Storage layout:
   /              OS, Rust, apt packages.       Standard CloudLab image.
   /mnt/work      Ballista source + build,      Ephemeral Blockstore.
                  executor --work-dir.          Fresh every experiment.
-  /mnt/data      IMDb parquet (executors).     Ephemeral Blockstore,
+  /mnt/data      Dataset (executors).          Ephemeral Blockstore,
                                                optionally pre-populated
-                                               from imdbDatasetURN.
+                                               from datasetURN.
 
 A new ballistaRef triggers a clean from-scratch Ballista build (since
 /mnt/work is recreated empty each experiment). Data is either prepped
@@ -19,7 +19,7 @@ experiment after.
 Knobs of note:
   - linkBandwidth/Latency/Plr: artificially throttle the LAN.
   - concurrentTasks: cap per-executor parallelism (--concurrent-tasks).
-  - imdbDatasetURN: Image-Backed Dataset to auto-populate /mnt/data.
+  - datasetURN: Image-Backed Dataset to auto-populate /mnt/data.
 """
 
 import geni.portal as portal
@@ -69,24 +69,24 @@ pc.defineParameter(
     longDescription="A branch ('main') or tag ('v0.12.0') always fetches the "
                     "current tip; a full or short commit SHA pins it.")
 pc.defineParameter("experimentRepo",
-                   "Repo with this profile.py + setup.sh + run_redbench.py",
+                   "Repo with this profile.py + setup.sh + experiment driver",
                    portal.ParameterType.STRING,
                    "https://github.com/YOUR_USER/YOUR_REPO.git")
 
 pc.defineParameter(
-    "imdbDatasetURN",
+    "datasetURN",
     "Image-Backed Dataset URN to pre-populate /mnt/data (blank = empty)",
     portal.ParameterType.STRING, "",
     longDescription="If set, every executor's /mnt/data Blockstore is "
                     "initialized from this dataset (one-time create via "
-                    "CloudLab UI after running prep_imdb.sh). Leave blank "
-                    "on the first experiment.")
+                    "CloudLab UI after staging the data on a first run). "
+                    "Leave blank on the first experiment.")
 
 pc.defineParameter(
-    "imdbDataSize", "Size of the /mnt/data Blockstore per executor (GB)",
+    "dataDiskSize", "Size of the /mnt/data Blockstore per executor (GB)",
     portal.ParameterType.INTEGER, 20,
-    longDescription="Must be >= the dataset content size (~4GB for IMDb "
-                    "parquet). Still allocated when no dataset is set.")
+    longDescription="Must be >= the dataset content size. Still allocated "
+                    "when no dataset is set.")
 
 pc.defineParameter(
     "concurrentTasks", "Concurrent tasks per executor (0 = all CPU cores)",
@@ -160,17 +160,17 @@ def make_node(name, role):
     bs.size = str(params.workDiskSize) + "GB"
     bs.placement = "any"
 
-    # Executors get a SECOND Blockstore at /mnt/data for IMDb parquet.
-    # If imdbDatasetURN is set, CloudLab initializes this Blockstore from
+    # Executors get a SECOND Blockstore at /mnt/data for the dataset.
+    # If datasetURN is set, CloudLab initializes this Blockstore from
     # that Image-Backed Dataset at boot (each executor gets its own local
     # clone - no fan-out needed). If unset, /mnt/data starts empty and
-    # you populate it with prep_imdb.sh.
+    # you populate it yourself on the first experiment.
     if role == "executor":
         data_bs = n.Blockstore(name + "-data", "/mnt/data")
-        data_bs.size = str(params.imdbDataSize) + "GB"
+        data_bs.size = str(params.dataDiskSize) + "GB"
         data_bs.placement = "any"
-        if params.imdbDatasetURN:
-            data_bs.dataset = params.imdbDatasetURN
+        if params.datasetURN:
+            data_bs.dataset = params.datasetURN
 
     n.addService(pg.Execute(
         shell="bash",
