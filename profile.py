@@ -46,7 +46,9 @@ imageList = [
     ('urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU20-64-STD', 'Ubuntu 20.04'),
 ]
 pc.defineParameter("osImage", "OS image",
-                   portal.ParameterType.IMAGE, imageList[1], imageList)
+                   portal.ParameterType.IMAGE, imageList[0], imageList,
+                   longDescription="setup.sh assumes apt (Debian/Ubuntu). "
+                                   "Pin a specific Ubuntu if you need to be sure.")
 
 # ---------------------------------------------------------------------------
 # Ballista
