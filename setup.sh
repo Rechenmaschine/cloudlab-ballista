@@ -101,9 +101,10 @@ case "$ROLE" in
         ;;
 esac
 
-# Now that cargo has populated registry/ and git/ as root, open them up
-# so non-root users can do their own `cargo build` against this CARGO_HOME.
-chmod -R a+rwX "$CARGO_HOME/registry" "$CARGO_HOME/git" 2>/dev/null || true
+# Single-tenant CloudLab box: open up everything that users might want to
+# poke at (cargo registry, rustup toolchains, ballista build dir) so they
+# can rebuild/clean without sudo. Not secure — that's intentional.
+chmod -R a+rwX /usr/local/cargo /usr/local/rustup /mnt/work 2>/dev/null || true
 
 # 4) Launch daemon inside a detached tmux session so it can be attached
 # later with: sudo tmux attach -t ballista
