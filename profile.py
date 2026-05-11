@@ -37,7 +37,7 @@ pc.defineParameter(
 
 pc.defineParameter("phystype", "Physical node type (blank=any)",
                    portal.ParameterType.NODETYPE, "",
-                   longDescription="e.g. c220g2, c6420, xl170")
+                   longDescription="e.g. `c220g2`, `c6420`, `xl170`.")
 
 imageList = [
     ('default', 'Default Image (cluster picks)'),
@@ -47,8 +47,8 @@ imageList = [
 ]
 pc.defineParameter("osImage", "OS image",
                    portal.ParameterType.IMAGE, imageList[2], imageList,
-                   longDescription="setup.sh assumes apt (Debian/Ubuntu). "
-                                   "Ubuntu 22.04 is the most broadly available "
+                   longDescription="`setup.sh` assumes **apt** (Debian/Ubuntu). "
+                                   "**Ubuntu 22.04** is the most broadly available "
                                    "across CloudLab clusters.")
 
 # ---------------------------------------------------------------------------
@@ -63,13 +63,13 @@ pc.defineParameter(
 pc.defineParameter(
     "ballistaRef", "Branch, tag, or commit SHA to check out",
     portal.ParameterType.STRING, "main",
-    longDescription="A branch ('main') or tag ('v0.12.0') always fetches the "
+    longDescription="A branch (`main`) or tag (`v0.12.0`) always fetches the "
                     "current tip; a full or short commit SHA pins it.")
 
 pc.defineParameter(
     "concurrentTasks", "Concurrent tasks per executor (0 = all CPU cores)",
     portal.ParameterType.INTEGER, 0,
-    longDescription="Passed to ballista-executor as --concurrent-tasks. "
+    longDescription="Passed to `ballista-executor` as `--concurrent-tasks`. "
                     "Lower it to study scheduler queueing or simulate slow nodes.")
 
 # ---------------------------------------------------------------------------
@@ -79,25 +79,25 @@ pc.defineParameter(
     "datasetURN",
     "Image-Backed Dataset URN to pre-populate /mnt/data (blank = empty)",
     portal.ParameterType.STRING, "",
-    longDescription="If set, every executor's /mnt/data Blockstore is "
+    longDescription="If set, every executor's `/mnt/data` Blockstore is "
                     "initialized from this dataset (one-time create via "
                     "CloudLab UI after staging the data on a first run). "
-                    "Leave blank on the first experiment.")
+                    "**Leave blank on the first experiment.**")
 
 pc.defineParameter(
     "dataDiskSize", "Size of the /mnt/data Blockstore per executor (GB)",
     portal.ParameterType.INTEGER, 20,
-    longDescription="Must be >= the dataset content size. Still allocated "
+    longDescription="Must be **>= the dataset content size**. Still allocated "
                     "when no dataset is set.")
 
 pc.defineParameter(
     "workDiskSize", "Ephemeral /mnt/work Blockstore size per node (GB)",
     portal.ParameterType.INTEGER, 30,
-    longDescription="Holds Ballista source + cargo build target/ AND "
-                    "(on executors) the --work-dir for shuffle/spill. "
-                    "Blockstores are NOT captured in disk-image snapshots "
+    longDescription="Holds Ballista source + `cargo` build `target/` AND "
+                    "(on executors) the `--work-dir` for shuffle/spill. "
+                    "Blockstores are **NOT** captured in disk-image snapshots "
                     "and are recreated empty for every new experiment, so "
-                    "switching ballistaRef always triggers a clean build.")
+                    "switching `ballistaRef` always triggers a clean build.")
 
 # ---------------------------------------------------------------------------
 # Network shaping
@@ -107,8 +107,9 @@ pc.defineParameterGroup("network", "Network")
 pc.defineParameter(
     "linkBandwidth", "LAN bandwidth limit in Kbps (0 = unlimited)",
     portal.ParameterType.INTEGER, 0, groupId="network",
-    longDescription="100000 = 100 Mb/s, 1000000 = 1 Gb/s, 10000000 = 10 Gb/s. "
-                    "Activates Emulab link shaping (dummynet).")
+    longDescription="Examples: `100000` = 100 Mb/s, `1000000` = 1 Gb/s, "
+                    "`10000000` = 10 Gb/s. Activates Emulab link shaping "
+                    "(**dummynet**).")
 
 pc.defineParameter(
     "linkLatency", "Added one-way LAN latency in ms (0 = none)",
@@ -117,7 +118,7 @@ pc.defineParameter(
 pc.defineParameter(
     "linkPlr", "LAN packet loss rate (0 = none)",
     portal.ParameterType.LOSSRATE, 0.0, groupId="network",
-    longDescription="e.g. 0.01 = 1% loss.")
+    longDescription="e.g. `0.01` = 1% loss.")
 
 params = pc.bindParameters()
 
