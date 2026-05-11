@@ -106,22 +106,11 @@ esac
 # can rebuild/clean without sudo. Not secure — that's intentional.
 chmod -R a+rwX /usr/local/cargo /usr/local/rustup /mnt/work 2>/dev/null || true
 
-# Hand ownership of the ballista dir to a real project user (CloudLab puts
-# them under /users/, skipping the geniuser service account) and create a
-# ~/ballista symlink in every project user's home for convenience.
-PROJECT_USER=""
-for udir in /users/*/; do
-    user=$(basename "$udir")
-    [[ "$user" == "geniuser" ]] && continue
-    [[ -z "$PROJECT_USER" ]] && PROJECT_USER="$user"
-    ln -sfn /mnt/work/ballista "$udir/ballista"
-    chown -h "$user" "$udir/ballista" 2>/dev/null || true
-done
-if [[ -n "$PROJECT_USER" ]]; then
-    chown -R "$PROJECT_USER" /mnt/work/ballista
-fi
-# Belt + suspenders: trust the dir system-wide so git is happy for any user.
-git config --system --add safe.directory /mnt/work/ballista || true
+# Trust the ballista dir for any user (silences git's "dubious ownership"
+# warning that fires because the dir was created by root).
+git config --system --add safe.directory /mnt/work/ballista
+# Convenience symlink so users can `cd /opt/ballista`.
+ln -sfn /mnt/work/ballista /opt/ballista
 
 # 4) Launch daemon inside a detached tmux session so it can be attached
 # later with: sudo tmux attach -t ballista
