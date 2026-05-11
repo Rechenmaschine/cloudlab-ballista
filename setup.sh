@@ -64,8 +64,10 @@ fi
 export CARGO_HOME=/usr/local/cargo
 export RUSTUP_HOME=/usr/local/rustup
 if [[ ! -x "$CARGO_HOME/bin/cargo" ]]; then
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
+    # rustup refuses to run when $HOME doesn't match euid's home (sudo
+    # leakage). Pin both env vars explicitly to root so the check passes.
+    HOME=/root curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | HOME=/root sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
 fi
 chmod -R a+rX "$CARGO_HOME" "$RUSTUP_HOME"
 cat >/etc/profile.d/cargo.sh <<'EOF'
