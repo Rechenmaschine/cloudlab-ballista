@@ -93,8 +93,13 @@ git -C "$BALLISTA_DIR" fetch --depth 1 origin "$BALLISTA_REF"
 git -C "$BALLISTA_DIR" checkout FETCH_HEAD
 cd "$BALLISTA_DIR"
 case "$ROLE" in
-    scheduler) cargo build --release -p ballista-scheduler -p ballista-cli ;;
-    executor)  cargo build --release -p ballista-executor ;;
+    scheduler)
+        cargo build --release -p ballista-scheduler -p ballista-cli
+        ln -sf "$BALLISTA_DIR/target/release/ballista-cli" /usr/local/bin/ballista-cli
+        ;;
+    executor)
+        cargo build --release -p ballista-executor
+        ;;
 esac
 
 # 4) Launch daemon inside a detached tmux session so it can be attached
