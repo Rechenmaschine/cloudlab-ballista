@@ -18,6 +18,13 @@ set -euo pipefail
 # and may not honor user-side redirects from the outer shell.
 exec >>/var/log/ballista-setup.log 2>&1
 
+# Loud failure: drop a marker file, print to log, and propagate non-zero
+# exit so CloudLab sees the Startup service failed.
+trap 'rc=$?; \
+      echo "[FAILED $(date -Is)] setup.sh rc=$rc line=$LINENO cmd=\"$BASH_COMMAND\"" \
+        | tee /var/log/ballista-setup.FAILED >&2; \
+      exit $rc' ERR
+
 ROLE="${1:?role required}"
 BALLISTA_REPO="${2:?ballista repo url required}"
 BALLISTA_REF="${3:?ballista ref required}"
@@ -50,12 +57,15 @@ if ! protoc --version 2>/dev/null | grep -qE "libprotoc (2[7-9]|[3-9][0-9])"; th
     rm "/tmp/${PROTOC_ZIP}"
 fi
 
-# 2) Rust
-if ! command -v cargo >/dev/null; then
+# 2) Rust — installed at a known shared path; we use the absolute cargo
+# binary below, no PATH gymnastics needed.
+export CARGO_HOME=/opt/cargo
+export RUSTUP_HOME=/opt/rustup
+CARGO="$CARGO_HOME/bin/cargo"
+if [[ ! -x "$CARGO" ]]; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --default-toolchain stable --profile minimal
+        | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
 fi
-source "$HOME/.cargo/env"
 
 # 3) Fetch + build Ballista on /mnt/work (ephemeral, not snapshotted).
 chmod 1777 /mnt/work || true
@@ -69,8 +79,8 @@ git -C "$BALLISTA_DIR" fetch --depth 1 origin "$BALLISTA_REF"
 git -C "$BALLISTA_DIR" checkout FETCH_HEAD
 cd "$BALLISTA_DIR"
 case "$ROLE" in
-    scheduler) cargo build --release -p ballista-scheduler ;;
-    executor)  cargo build --release -p ballista-executor ;;
+    scheduler) "$CARGO" build --release -p ballista-scheduler ;;
+    executor)  "$CARGO" build --release -p ballista-executor ;;
 esac
 
 # 4) Launch daemon
@@ -78,7 +88,8 @@ if [[ "$ROLE" == "scheduler" ]]; then
     nohup "$BALLISTA_DIR/target/release/ballista-scheduler" \
         --bind-host 0.0.0.0 --bind-port 50050 \
         >/var/log/ballista-scheduler.log 2>&1 &
-    echo "[$(date -Is)] Scheduler listening on :50050"
+    DAEMON_PID=$!
+    echo "[$(date -Is)] Scheduler launched (pid=$DAEMON_PID)"
 
 elif [[ "$ROLE" == "executor" ]]; then
     until nc -z "$SCHEDULER_HOST" 50050; do sleep 5; done
@@ -96,9 +107,22 @@ elif [[ "$ROLE" == "executor" ]]; then
         --work-dir /mnt/work/ballista-rundir \
         $EXTRA \
         >/var/log/ballista-executor.log 2>&1 &
-    echo "[$(date -Is)] Executor registered with $SCHEDULER_HOST"
+    DAEMON_PID=$!
+    echo "[$(date -Is)] Executor launched (pid=$DAEMON_PID)"
 
 else
     echo "Unknown role: $ROLE" >&2
     exit 1
 fi
+
+# 5) Liveness check: daemon should still be alive 3s after launch.
+sleep 3
+if ! kill -0 "$DAEMON_PID" 2>/dev/null; then
+    echo "[FAILED $(date -Is)] $ROLE daemon (pid=$DAEMON_PID) died within 3s" \
+        | tee /var/log/ballista-setup.FAILED >&2
+    echo "--- tail of daemon log ---" >&2
+    tail -n 50 "/var/log/ballista-${ROLE}.log" >&2 || true
+    exit 1
+fi
+
+echo "[SUCCESS $(date -Is)] $ROLE setup complete (pid=$DAEMON_PID)"
