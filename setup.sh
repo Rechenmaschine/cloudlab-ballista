@@ -101,16 +101,20 @@ case "$ROLE" in
         ;;
 esac
 
-# Single-tenant CloudLab box: open up everything that users might want to
-# poke at (cargo registry, rustup toolchains, ballista build dir) so they
-# can rebuild/clean without sudo. Not secure — that's intentional.
-chmod -R a+rwX /usr/local/cargo /usr/local/rustup /mnt/work 2>/dev/null || true
+# Shared cargo install dirs stay root-owned but world-rwx so any user can
+# `cargo build` against this CARGO_HOME without sudo.
+chmod -R a+rwX /usr/local/cargo /usr/local/rustup 2>/dev/null || true
 
-# Trust the ballista dir for any user (silences git's "dubious ownership"
-# warning that fires because the dir was created by root).
-git config --system --add safe.directory /mnt/work/ballista
-# Convenience symlink so users can `cd /opt/ballista`.
-ln -sfn /mnt/work/ballista /opt/ballista
+# Hand ownership of the ballista dir to the project user (CloudLab puts
+# real users under /users/, excluding the geniuser service account) so
+# git/cargo/rm/etc. all Just Work without sudo or safe.directory tricks.
+# Also symlink it into their home for convenience.
+PROJECT_USER=$(ls /users 2>/dev/null | grep -v '^geniuser$' | head -n1)
+if [[ -n "$PROJECT_USER" ]]; then
+    chown -R "$PROJECT_USER" /mnt/work/ballista
+    ln -sfn /mnt/work/ballista "/users/$PROJECT_USER/ballista"
+    chown -h "$PROJECT_USER" "/users/$PROJECT_USER/ballista"
+fi
 
 # 4) Launch daemon inside a detached tmux session so it can be attached
 # later with: sudo tmux attach -t ballista
