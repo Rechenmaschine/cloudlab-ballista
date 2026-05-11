@@ -43,7 +43,7 @@ dpkg-divert --local --rename --add /usr/bin/mandb >/dev/null || true
 ln -sf /bin/true /usr/bin/mandb
 apt-get update
 apt-get install -y --no-install-recommends \
-    build-essential pkg-config libssl-dev cmake unzip \
+    build-essential pkg-config libssl-dev cmake unzip tmux \
     git curl ca-certificates netcat-openbsd
 
 # 1b) protoc (Ubuntu 22.04 ships v3.12; Ballista's substrait dep uses
@@ -80,46 +80,53 @@ case "$ROLE" in
     executor)  cargo build --release -p ballista-executor ;;
 esac
 
-# 4) Launch daemon
-if [[ "$ROLE" == "scheduler" ]]; then
-    nohup "$BALLISTA_DIR/target/release/ballista-scheduler" \
-        --bind-host 0.0.0.0 --bind-port 50050 \
-        >/var/log/ballista-scheduler.log 2>&1 &
-    DAEMON_PID=$!
-    echo "[$(date -Is)] Scheduler launched (pid=$DAEMON_PID)"
+# 4) Launch daemon inside a detached tmux session so it can be attached
+# later with: sudo tmux attach -t ballista
+# Output is tee'd to a log file too, so you can still grep/tail without
+# attaching to the tmux session.
+TMUX_SESSION=ballista
+LOG_FILE="/var/log/ballista-${ROLE}.log"
 
+if [[ "$ROLE" == "scheduler" ]]; then
+    CMD=(
+        "$BALLISTA_DIR/target/release/ballista-scheduler"
+        --bind-host 0.0.0.0 --bind-port 50050
+    )
 elif [[ "$ROLE" == "executor" ]]; then
     until nc -z "$SCHEDULER_HOST" 50050; do sleep 5; done
-
     DATA_IP="$(ip -4 -o addr show eth1 | awk '{print $4}' | cut -d/ -f1)"
-    EXTRA=""
-    [[ "$CONCURRENT_TASKS" -gt 0 ]] && EXTRA="--concurrent-tasks $CONCURRENT_TASKS"
-
     mkdir -p /mnt/work/ballista-rundir
-    # shellcheck disable=SC2086
-    nohup "$BALLISTA_DIR/target/release/ballista-executor" \
-        --bind-host 0.0.0.0 --external-host "$DATA_IP" \
-        --bind-port 50051 \
-        --scheduler-host "$SCHEDULER_HOST" --scheduler-port 50050 \
-        --work-dir /mnt/work/ballista-rundir \
-        $EXTRA \
-        >/var/log/ballista-executor.log 2>&1 &
-    DAEMON_PID=$!
-    echo "[$(date -Is)] Executor launched (pid=$DAEMON_PID)"
-
+    CMD=(
+        "$BALLISTA_DIR/target/release/ballista-executor"
+        --bind-host 0.0.0.0 --external-host "$DATA_IP"
+        --bind-port 50051
+        --scheduler-host "$SCHEDULER_HOST" --scheduler-port 50050
+        --work-dir /mnt/work/ballista-rundir
+    )
+    [[ "$CONCURRENT_TASKS" -gt 0 ]] && CMD+=(--concurrent-tasks "$CONCURRENT_TASKS")
 else
     echo "Unknown role: $ROLE" >&2
     exit 1
 fi
 
-# 5) Liveness check: daemon should still be alive 3s after launch.
+# Kill any pre-existing session of the same name (idempotent re-runs).
+tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+
+# Start detached. The shell wrapper pipes stdout/stderr through tee so
+# both the tmux scrollback and the log file get the daemon's output.
+tmux new-session -d -s "$TMUX_SESSION" \
+    "exec '${CMD[0]}' ${CMD[*]:1} 2>&1 | tee '$LOG_FILE'"
+
+echo "[$(date -Is)] $ROLE launched in tmux session '$TMUX_SESSION' (log: $LOG_FILE)"
+
+# 5) Liveness check: tmux session should still exist 3s later.
 sleep 3
-if ! kill -0 "$DAEMON_PID" 2>/dev/null; then
-    echo "[FAILED $(date -Is)] $ROLE daemon (pid=$DAEMON_PID) died within 3s" \
+if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "[FAILED $(date -Is)] $ROLE daemon died within 3s; tmux session gone" \
         | tee /var/log/ballista-setup.FAILED >&2
     echo "--- tail of daemon log ---" >&2
-    tail -n 50 "/var/log/ballista-${ROLE}.log" >&2 || true
+    tail -n 50 "$LOG_FILE" >&2 || true
     exit 1
 fi
 
-echo "[SUCCESS $(date -Is)] $ROLE setup complete (pid=$DAEMON_PID)"
+echo "[SUCCESS $(date -Is)] $ROLE setup complete. Attach with: sudo tmux attach -t $TMUX_SESSION"
