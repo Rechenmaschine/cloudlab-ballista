@@ -111,6 +111,14 @@ git config --system --add safe.directory /mnt/work/ballista || true
 # System-wide convenience symlink so anyone can `cd /opt/ballista`.
 ln -sfn /mnt/work/ballista /opt/ballista
 
+# CloudLab knows who created this experiment via `geni-get user_urn`
+# (urn:...+user+<username>). Drop a ~/ballista symlink for them too.
+EXP_OWNER=$(geni-get user_urn 2>/dev/null | awk -F+ '{print $NF}')
+if [[ -n "$EXP_OWNER" && -d "/users/$EXP_OWNER" ]]; then
+    ln -sfn /mnt/work/ballista "/users/$EXP_OWNER/ballista"
+    chown -h "$EXP_OWNER" "/users/$EXP_OWNER/ballista"
+fi
+
 # 4) Launch daemon in a SHARED tmux session — uses a world-accessible
 # socket so every user can `tmux -S /tmp/ballista.tmux attach -t ballista`
 # without sudo and without us needing to guess which user is "primary".
