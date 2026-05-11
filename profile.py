@@ -92,21 +92,23 @@ pc.defineParameter(
                     "Lower it to study scheduler queueing or simulate slow nodes.")
 
 # ---------------------------------------------------------------------------
-# Network shaping (advanced)
+# Network shaping
 # ---------------------------------------------------------------------------
+pc.defineParameterGroup("network", "Network")
+
 pc.defineParameter(
     "linkBandwidth", "LAN bandwidth limit in Kbps (0 = unlimited)",
-    portal.ParameterType.INTEGER, 0, advanced=True,
+    portal.ParameterType.INTEGER, 0, groupId="network",
     longDescription="100000 = 100 Mb/s, 1000000 = 1 Gb/s, 10000000 = 10 Gb/s. "
                     "Activates Emulab link shaping (dummynet).")
 
 pc.defineParameter(
     "linkLatency", "Added one-way LAN latency in ms (0 = none)",
-    portal.ParameterType.INTEGER, 0, advanced=True)
+    portal.ParameterType.INTEGER, 0, groupId="network")
 
 pc.defineParameter(
     "linkPlr", "LAN packet loss rate (0 = none)",
-    portal.ParameterType.LOSSRATE, 0.0, advanced=True,
+    portal.ParameterType.LOSSRATE, 0.0, groupId="network",
     longDescription="e.g. 0.01 = 1% loss.")
 
 params = pc.bindParameters()
