@@ -42,7 +42,7 @@ imageList = [
     ('urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU20-64-STD', 'Ubuntu 20.04'),
 ]
 pc.defineParameter("osImage", "OS image",
-                   portal.ParameterType.IMAGE, imageList[2], imageList)
+                   portal.ParameterType.IMAGE, imageList[1], imageList)
 
 pc.defineParameter("phystype", "Physical node type (blank=any)",
                    portal.ParameterType.NODETYPE, "",
@@ -68,11 +68,6 @@ pc.defineParameter(
     portal.ParameterType.STRING, "main",
     longDescription="A branch ('main') or tag ('v0.12.0') always fetches the "
                     "current tip; a full or short commit SHA pins it.")
-pc.defineParameter("experimentRepo",
-                   "Repo with this profile.py + setup.sh + experiment driver",
-                   portal.ParameterType.STRING,
-                   "https://github.com/YOUR_USER/YOUR_REPO.git")
-
 pc.defineParameter(
     "datasetURN",
     "Image-Backed Dataset URN to pre-populate /mnt/data (blank = empty)",
@@ -175,8 +170,6 @@ def make_node(name, role):
     n.addService(pg.Execute(
         shell="bash",
         command=(
-            "(sudo git clone " + params.experimentRepo + " /local/repo "
-            "|| (cd /local/repo && sudo git pull)) && "
             "sudo -E bash /local/repo/setup.sh " +
             role + " " +
             params.ballistaRepo + " " +
