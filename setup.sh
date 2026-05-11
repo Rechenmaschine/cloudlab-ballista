@@ -31,7 +31,8 @@ echo "[$(date -Is)] $(geni-get client_id) role=$ROLE ref=$BALLISTA_REF tasks=$CO
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-    build-essential pkg-config libssl-dev cmake protobuf-compiler \
+    build-essential pkg-config libssl-dev cmake \
+    protobuf-compiler libprotobuf-dev \
     git curl ca-certificates netcat-openbsd
 
 # 2) Rust
