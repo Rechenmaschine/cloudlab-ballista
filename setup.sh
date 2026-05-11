@@ -93,15 +93,16 @@ git -C "$BALLISTA_DIR" fetch --depth 1 origin "$BALLISTA_REF"
 git -C "$BALLISTA_DIR" checkout FETCH_HEAD
 cd "$BALLISTA_DIR"
 case "$ROLE" in
-    scheduler) cargo build --release -p ballista-scheduler -p ballista-cli ;;
-    executor)  cargo build --release -p ballista-executor ;;
+    scheduler)
+        cargo build --release -p ballista-scheduler -p ballista-cli
+        # Expose only the user-facing CLI to everyone via /usr/local/bin
+        # (always on PATH, even in non-login shells like `ssh node cmd`).
+        ln -sf "$BALLISTA_DIR/target/release/ballista-cli" /usr/local/bin/ballista-cli
+        ;;
+    executor)
+        cargo build --release -p ballista-executor
+        ;;
 esac
-
-# Put the built binaries on every user's PATH.
-cat >/etc/profile.d/ballista.sh <<EOF
-export PATH="$BALLISTA_DIR/target/release:\$PATH"
-EOF
-chmod 0644 /etc/profile.d/ballista.sh
 
 # 4) Launch daemon inside a detached tmux session so it can be attached
 # later with: sudo tmux attach -t ballista
