@@ -183,12 +183,11 @@ def make_node(name, role):
     n.addService(pg.Execute(
         shell="bash",
         command=(
-            "sudo -E bash /local/repo/setup.sh " +
+            "sudo -E bash /local/repository/setup.sh " +
             role + " " +
             params.ballistaRepo + " " +
             params.ballistaRef + " " +
-            str(params.concurrentTasks) +
-            " >/var/log/ballista-setup.log 2>&1")))
+            str(params.concurrentTasks))))
     return n
 
 make_node("scheduler", "scheduler")

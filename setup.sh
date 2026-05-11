@@ -13,6 +13,11 @@
 # Usage: setup.sh <role> <ballista_repo> <ballista_ref> <concurrent_tasks>
 set -euo pipefail
 
+# Redirect everything to a stable log file (we run as root via sudo, so
+# /var/log/ is writable). The CloudLab startup-service log lives elsewhere
+# and may not honor user-side redirects from the outer shell.
+exec >>/var/log/ballista-setup.log 2>&1
+
 ROLE="${1:?role required}"
 BALLISTA_REPO="${2:?ballista repo url required}"
 BALLISTA_REF="${3:?ballista ref required}"
