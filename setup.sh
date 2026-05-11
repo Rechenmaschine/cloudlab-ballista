@@ -111,25 +111,25 @@ git config --system --add safe.directory /mnt/work/ballista || true
 # System-wide convenience symlink so anyone can `cd /opt/ballista`.
 ln -sfn /mnt/work/ballista /opt/ballista
 
-# CloudLab knows who created this experiment via `geni-get user_urn`
-# (urn:...+user+<username>). Drop a ~/ballista symlink for them too.
+# CloudLab's `geni-get user_urn` returns urn:...+user+<username> for the
+# experiment creator. Use that to pick who the daemon runs as, so plain
+# `tmux attach -t ballista` works from their shell without -S/sudo.
 EXP_OWNER=$(geni-get user_urn 2>/dev/null | awk -F+ '{print $NF}')
+RUN_AS="${EXP_OWNER:-root}"
 if [[ -n "$EXP_OWNER" && -d "/users/$EXP_OWNER" ]]; then
     ln -sfn /mnt/work/ballista "/users/$EXP_OWNER/ballista"
     chown -h "$EXP_OWNER" "/users/$EXP_OWNER/ballista"
 fi
 
-# 4) Launch daemon in a SHARED tmux session — uses a world-accessible
-# socket so every user can `tmux -S /tmp/ballista.tmux attach -t ballista`
-# without sudo and without us needing to guess which user is "primary".
-TMUX_SOCKET=/tmp/ballista.tmux
+# 4) Launch daemon as $RUN_AS so tmux session, log file, and process are
+# all owned by the experiment creator — no sudo needed to attach/tail/kill.
 TMUX_SESSION=ballista
 LOG_DIR=/var/log/ballista
 LOG_FILE="$LOG_DIR/${ROLE}.log"
 mkdir -p "$LOG_DIR"
-chmod 1777 "$LOG_DIR"
+chown "$RUN_AS" "$LOG_DIR"
 mkdir -p /mnt/work/ballista-rundir
-chmod 1777 /mnt/work/ballista-rundir
+chown "$RUN_AS" /mnt/work/ballista-rundir
 
 if [[ "$ROLE" == "scheduler" ]]; then
     CMD=(
@@ -160,19 +160,17 @@ else
 fi
 
 # Kill any pre-existing session of the same name (idempotent re-runs).
-tmux -S "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+runuser -u "$RUN_AS" -- tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 
-# Start detached on the shared socket. tee splits output to a world-
-# writable log file so any user can tail it.
-tmux -S "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+# Start detached as $RUN_AS. tee splits output to log file too.
+runuser -u "$RUN_AS" -- tmux new-session -d -s "$TMUX_SESSION" \
     "exec '${CMD[0]}' ${CMD[*]:1} 2>&1 | tee '$LOG_FILE'"
-chmod 0666 "$TMUX_SOCKET" "$LOG_FILE" 2>/dev/null || true
 
-echo "[$(date -Is)] $ROLE launched in tmux session '$TMUX_SESSION' on socket $TMUX_SOCKET (log: $LOG_FILE)"
+echo "[$(date -Is)] $ROLE launched as $RUN_AS in tmux session '$TMUX_SESSION' (log: $LOG_FILE)"
 
 # 5) Liveness check: tmux session should still exist 3s later.
 sleep 3
-if ! tmux -S "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+if ! runuser -u "$RUN_AS" -- tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
     echo "[FAILED $(date -Is)] $ROLE daemon died within 3s; tmux session gone" \
         | tee /var/log/ballista-setup.FAILED >&2
     echo "--- tail of daemon log ---" >&2
@@ -180,4 +178,4 @@ if ! tmux -S "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
     exit 1
 fi
 
-echo "[SUCCESS $(date -Is)] $ROLE setup complete. Attach with: tmux -S $TMUX_SOCKET attach -t $TMUX_SESSION"
+echo "[SUCCESS $(date -Is)] $ROLE setup complete. Attach with: tmux attach -t $TMUX_SESSION  (as user $RUN_AS)"
