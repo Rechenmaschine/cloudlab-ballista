@@ -31,9 +31,19 @@ echo "[$(date -Is)] $(geni-get client_id) role=$ROLE ref=$BALLISTA_REF tasks=$CO
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-    build-essential pkg-config libssl-dev cmake \
-    protobuf-compiler libprotobuf-dev \
+    build-essential pkg-config libssl-dev cmake unzip \
     git curl ca-certificates netcat-openbsd
+
+# 1b) protoc (Ubuntu 22.04 ships v3.12; Ballista's substrait dep uses
+# proto3 optional fields which need >= 3.15. Install upstream release.)
+PROTOC_VERSION=27.3
+if ! protoc --version 2>/dev/null | grep -qE "libprotoc (2[7-9]|[3-9][0-9])"; then
+    PROTOC_ZIP=protoc-${PROTOC_VERSION}-linux-x86_64.zip
+    curl -fsSL -o "/tmp/${PROTOC_ZIP}" \
+        "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}"
+    unzip -o "/tmp/${PROTOC_ZIP}" -d /usr/local
+    rm "/tmp/${PROTOC_ZIP}"
+fi
 
 # 2) Rust
 if ! command -v cargo >/dev/null; then
