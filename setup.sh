@@ -105,28 +105,23 @@ esac
 # `cargo build` against this CARGO_HOME without sudo.
 chmod -R a+rwX /usr/local/cargo /usr/local/rustup 2>/dev/null || true
 
-# Hand ownership of the ballista dir to the project user (CloudLab puts
-# real users under /users/, excluding the geniuser service account) so
-# git/cargo/rm/etc. all Just Work without sudo or safe.directory tricks.
-# Also symlink it into their home for convenience.
-PROJECT_USER=$(ls /users 2>/dev/null | grep -v '^geniuser$' | head -n1)
-if [[ -n "$PROJECT_USER" ]]; then
-    chown -R "$PROJECT_USER" /mnt/work/ballista
-    ln -sfn /mnt/work/ballista "/users/$PROJECT_USER/ballista"
-    chown -h "$PROJECT_USER" "/users/$PROJECT_USER/ballista"
-fi
+# Trust the ballista repo system-wide so any user gets a clean git pull
+# (no "dubious ownership" warning even though root cloned it).
+git config --system --add safe.directory /mnt/work/ballista || true
+# System-wide convenience symlink so anyone can `cd /opt/ballista`.
+ln -sfn /mnt/work/ballista /opt/ballista
 
-# 4) Launch daemon inside a detached tmux session, owned by the project
-# user (not root). That way `tmux attach`, `tail`, and `kill` all work
-# without sudo. Falls back to root if no project user was found.
+# 4) Launch daemon in a SHARED tmux session — uses a world-accessible
+# socket so every user can `tmux -S /tmp/ballista.tmux attach -t ballista`
+# without sudo and without us needing to guess which user is "primary".
+TMUX_SOCKET=/tmp/ballista.tmux
 TMUX_SESSION=ballista
-RUN_AS="${PROJECT_USER:-root}"
-LOG_DIR="/var/log/ballista"
-LOG_FILE="${LOG_DIR}/${ROLE}.log"
+LOG_DIR=/var/log/ballista
+LOG_FILE="$LOG_DIR/${ROLE}.log"
 mkdir -p "$LOG_DIR"
-chown "$RUN_AS" "$LOG_DIR"
+chmod 1777 "$LOG_DIR"
 mkdir -p /mnt/work/ballista-rundir
-chown "$RUN_AS" /mnt/work/ballista-rundir
+chmod 1777 /mnt/work/ballista-rundir
 
 if [[ "$ROLE" == "scheduler" ]]; then
     CMD=(
@@ -157,17 +152,19 @@ else
 fi
 
 # Kill any pre-existing session of the same name (idempotent re-runs).
-runuser -u "$RUN_AS" -- tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+tmux -S "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 
-# Start detached, owned by $RUN_AS. tee splits output to log file too.
-runuser -u "$RUN_AS" -- tmux new-session -d -s "$TMUX_SESSION" \
+# Start detached on the shared socket. tee splits output to a world-
+# writable log file so any user can tail it.
+tmux -S "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
     "exec '${CMD[0]}' ${CMD[*]:1} 2>&1 | tee '$LOG_FILE'"
+chmod 0666 "$TMUX_SOCKET" "$LOG_FILE" 2>/dev/null || true
 
-echo "[$(date -Is)] $ROLE launched as $RUN_AS in tmux session '$TMUX_SESSION' (log: $LOG_FILE)"
+echo "[$(date -Is)] $ROLE launched in tmux session '$TMUX_SESSION' on socket $TMUX_SOCKET (log: $LOG_FILE)"
 
 # 5) Liveness check: tmux session should still exist 3s later.
 sleep 3
-if ! runuser -u "$RUN_AS" -- tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+if ! tmux -S "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
     echo "[FAILED $(date -Is)] $ROLE daemon died within 3s; tmux session gone" \
         | tee /var/log/ballista-setup.FAILED >&2
     echo "--- tail of daemon log ---" >&2
@@ -175,4 +172,4 @@ if ! runuser -u "$RUN_AS" -- tmux has-session -t "$TMUX_SESSION" 2>/dev/null; th
     exit 1
 fi
 
-echo "[SUCCESS $(date -Is)] $ROLE setup complete. Attach with: sudo tmux attach -t $TMUX_SESSION"
+echo "[SUCCESS $(date -Is)] $ROLE setup complete. Attach with: tmux -S $TMUX_SOCKET attach -t $TMUX_SESSION"
