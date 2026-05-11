@@ -130,7 +130,11 @@ if [[ "$ROLE" == "scheduler" ]]; then
     )
 elif [[ "$ROLE" == "executor" ]]; then
     until nc -z "$SCHEDULER_HOST" 50050; do sleep 5; done
-    DATA_IP="$(ip -4 -o addr show eth1 | awk '{print $4}' | cut -d/ -f1)"
+    # The LAN interface name varies (eth1, eno1, enp...). Resolve the
+    # local IP by asking the kernel which source IP it would use to reach
+    # the scheduler — that's guaranteed to be on the experiment LAN.
+    DATA_IP="$(ip -4 -o route get "$(getent hosts "$SCHEDULER_HOST" | awk '{print $1}')" \
+               | sed -n 's/.*src \([0-9.]*\).*/\1/p')"
     mkdir -p /mnt/work/ballista-rundir
     CMD=(
         "$BALLISTA_DIR/target/release/ballista-executor"
