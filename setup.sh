@@ -57,15 +57,12 @@ if ! protoc --version 2>/dev/null | grep -qE "libprotoc (2[7-9]|[3-9][0-9])"; th
     rm "/tmp/${PROTOC_ZIP}"
 fi
 
-# 2) Rust — installed at a known shared path; we use the absolute cargo
-# binary below, no PATH gymnastics needed.
-export CARGO_HOME=/opt/cargo
-export RUSTUP_HOME=/opt/rustup
-CARGO="$CARGO_HOME/bin/cargo"
-if [[ ! -x "$CARGO" ]]; then
+# 2) Rust (default install path: $HOME/.cargo, which is /root/.cargo here).
+if ! command -v cargo >/dev/null; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
+        | sh -s -- -y --default-toolchain stable --profile minimal
 fi
+source "$HOME/.cargo/env"
 
 # 3) Fetch + build Ballista on /mnt/work (ephemeral, not snapshotted).
 chmod 1777 /mnt/work || true
@@ -79,8 +76,8 @@ git -C "$BALLISTA_DIR" fetch --depth 1 origin "$BALLISTA_REF"
 git -C "$BALLISTA_DIR" checkout FETCH_HEAD
 cd "$BALLISTA_DIR"
 case "$ROLE" in
-    scheduler) "$CARGO" build --release -p ballista-scheduler ;;
-    executor)  "$CARGO" build --release -p ballista-executor ;;
+    scheduler) cargo build --release -p ballista-scheduler ;;
+    executor)  cargo build --release -p ballista-executor ;;
 esac
 
 # 4) Launch daemon
