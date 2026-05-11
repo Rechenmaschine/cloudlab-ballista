@@ -70,9 +70,6 @@ if [[ ! -x "$CARGO_HOME/bin/cargo" ]]; then
         | HOME=/root sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path
 fi
 chmod -R a+rX "$CARGO_HOME" "$RUSTUP_HOME"
-# Make the registry/cache dirs world-writable so non-root users can run
-# `cargo build` without sudo (cargo writes to registry/cache/, registry/src/).
-chmod -R a+rwX "$CARGO_HOME/registry" "$CARGO_HOME/git" 2>/dev/null || true
 cat >/etc/profile.d/cargo.sh <<'EOF'
 export CARGO_HOME=/usr/local/cargo
 export RUSTUP_HOME=/usr/local/rustup
@@ -103,6 +100,10 @@ case "$ROLE" in
         cargo build --release -p ballista-executor
         ;;
 esac
+
+# Now that cargo has populated registry/ and git/ as root, open them up
+# so non-root users can do their own `cargo build` against this CARGO_HOME.
+chmod -R a+rwX "$CARGO_HOME/registry" "$CARGO_HOME/git" 2>/dev/null || true
 
 # 4) Launch daemon inside a detached tmux session so it can be attached
 # later with: sudo tmux attach -t ballista
