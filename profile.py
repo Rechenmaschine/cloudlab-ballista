@@ -60,9 +60,11 @@ pc.defineParameter(
 # ---------------------------------------------------------------------------
 # Ballista / experiment
 # ---------------------------------------------------------------------------
-pc.defineParameter("ballistaRepo", "Your custom Ballista fork URL",
-                   portal.ParameterType.STRING,
-                   "https://github.com/apache/datafusion-ballista.git")
+pc.defineParameter(
+    "ballistaRepo", "Ballista repo URL (default: upstream Apache Ballista)",
+    portal.ParameterType.STRING,
+    "https://github.com/apache/datafusion-ballista.git",
+    longDescription="Leave default for upstream, or point at your fork.")
 pc.defineParameter(
     "ballistaRef", "Branch, tag, or commit SHA to check out",
     portal.ParameterType.STRING, "main",
