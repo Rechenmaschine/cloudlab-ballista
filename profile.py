@@ -168,17 +168,17 @@ def make_node(name, role):
     bs.size = str(params.workDiskSize) + "GB"
     bs.placement = "any"
 
-    # Executors get a SECOND Blockstore at /mnt/data for the dataset.
-    # If datasetURN is set, CloudLab initializes this Blockstore from
-    # that Image-Backed Dataset at boot (each executor gets its own local
-    # clone - no fan-out needed). If unset, /mnt/data starts empty and
-    # you populate it yourself on the first experiment.
-    if role == "executor":
-        data_bs = n.Blockstore(name + "-data", "/mnt/data")
-        data_bs.size = str(params.dataDiskSize) + "GB"
-        data_bs.placement = "any"
-        if params.datasetURN:
-            data_bs.dataset = params.datasetURN
+    # Every node gets a SECOND Blockstore at /mnt/data for the dataset —
+    # including the scheduler, because DataFusion needs to list files on
+    # the planning side too (otherwise SELECTs return 0 rows). If
+    # datasetURN is set, CloudLab initializes this Blockstore from that
+    # Image-Backed Dataset at boot (each node gets its own local clone -
+    # no fan-out needed). If unset, /mnt/data starts empty.
+    data_bs = n.Blockstore(name + "-data", "/mnt/data")
+    data_bs.size = str(params.dataDiskSize) + "GB"
+    data_bs.placement = "any"
+    if params.datasetURN:
+        data_bs.dataset = params.datasetURN
 
     n.addService(pg.Execute(
         shell="bash",
