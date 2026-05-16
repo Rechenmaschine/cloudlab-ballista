@@ -169,7 +169,7 @@ def make_node(name, role):
     bs.size = str(params.workDiskSize) + "GB"
     bs.placement = "any"
 
-    # Every node gets a SECOND Blockstore at /mnt/data for the dataset —
+    # Every node gets a SECOND Blockstore at /mnt/data for the dataset --
     # including the scheduler, because DataFusion needs to list files on
     # the planning side too (otherwise SELECTs return 0 rows). If
     # datasetURN is set, CloudLab initializes this Blockstore from that
