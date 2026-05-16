@@ -79,13 +79,14 @@ pc.defineParameter(
     "datasetURN",
     "Image-Backed Dataset URN to pre-populate /mnt/data (blank = empty)",
     portal.ParameterType.STRING, "",
-    longDescription="If set, every executor's `/mnt/data` Blockstore is "
-                    "initialized from this dataset (one-time create via "
-                    "CloudLab UI after staging the data on a first run). "
+    longDescription="If set, every node's `/mnt/data` Blockstore "
+                    "(scheduler + executors) is initialized from this "
+                    "dataset (one-time create via CloudLab UI after "
+                    "staging the data on a first run). "
                     "**Leave blank on the first experiment.**")
 
 pc.defineParameter(
-    "dataDiskSize", "Size of the /mnt/data Blockstore per executor (GB)",
+    "dataDiskSize", "Size of the /mnt/data Blockstore per node (GB)",
     portal.ParameterType.INTEGER, 20,
     longDescription="Must be **>= the dataset content size**. Still allocated "
                     "when no dataset is set.")
