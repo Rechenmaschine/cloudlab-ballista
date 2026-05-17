@@ -138,6 +138,14 @@ if [[ "$ROLE" == "scheduler" ]]; then
         # Advertise to executors via the LAN hostname so their status
         # reports/heartbeats don't try to reach localhost.
         --external-host "$SCHEDULER_HOST"
+        # CARMA: shorten the default 1h / 5min retention so the scheduler
+        # doesn't pin a full ExecutionGraph clone per completed job for an
+        # hour — at ~7800 queries/h that's tens of GiB of resident memory
+        # for a benchmarking run. 60s state TTL bounds memory to a few
+        # hundred MiB without hurting result fetch (which uses the
+        # gRPC session, not completed_jobs).
+        --finished-job-state-clean-up-interval-seconds 60
+        --finished-job-data-clean-up-interval-seconds 30
     )
 elif [[ "$ROLE" == "executor" ]]; then
     until nc -z "$SCHEDULER_HOST" 50050; do sleep 5; done
@@ -159,12 +167,37 @@ else
     exit 1
 fi
 
+# CARMA: each setup.sh launch (fresh experiment or reboot-within) writes
+# its per-stage trace to a NEW timestamped file under /mnt/work so traces
+# from different launches never interleave. /mnt/work is the ephemeral
+# Blockstore — traces are large and OS-partition writes would risk
+# filling /. A `latest` symlink in the same dir always points at the
+# most recent file. Only set the env var on the scheduler role.
+LAUNCH_TS=$(date -u +'%Y%m%dT%H%M%SZ')
+TRACE_DIR=/mnt/work/ballista-traces
+TRACE_FILE="$TRACE_DIR/stages-${LAUNCH_TS}.jsonl"
+if [[ "$ROLE" == "scheduler" ]]; then
+    mkdir -p "$TRACE_DIR"
+    chown "$RUN_AS" "$TRACE_DIR"
+    # Pre-create the file so the symlink target exists and chown succeeds
+    # even if the scheduler is slow to write the first line.
+    runuser -u "$RUN_AS" -- touch "$TRACE_FILE"
+    runuser -u "$RUN_AS" -- ln -sfn "stages-${LAUNCH_TS}.jsonl" "$TRACE_DIR/latest"
+fi
+
 # Kill any pre-existing session of the same name (idempotent re-runs).
 runuser -u "$RUN_AS" -- tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 
-# Start detached as $RUN_AS. tee splits output to log file too.
-runuser -u "$RUN_AS" -- tmux new-session -d -s "$TMUX_SESSION" \
-    "exec '${CMD[0]}' ${CMD[*]:1} 2>&1 | tee '$LOG_FILE'"
+# Start detached as $RUN_AS. tee splits output to log file too. For the
+# scheduler role, BALLISTA_STAGE_TRACE_FILE arms the carma-listener
+# branch's stage-trace writer (no-op on stock Ballista, so safe).
+if [[ "$ROLE" == "scheduler" ]]; then
+    runuser -u "$RUN_AS" -- tmux new-session -d -s "$TMUX_SESSION" \
+        "BALLISTA_STAGE_TRACE_FILE='$TRACE_FILE' exec '${CMD[0]}' ${CMD[*]:1} 2>&1 | tee '$LOG_FILE'"
+else
+    runuser -u "$RUN_AS" -- tmux new-session -d -s "$TMUX_SESSION" \
+        "exec '${CMD[0]}' ${CMD[*]:1} 2>&1 | tee '$LOG_FILE'"
+fi
 
 echo "[$(date -Is)] $ROLE launched as $RUN_AS in tmux session '$TMUX_SESSION' (log: $LOG_FILE)"
 
